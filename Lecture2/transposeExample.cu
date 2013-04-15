@@ -1,10 +1,12 @@
-#include <stdio.h>
-#include <stdlib.h>
+#include <cstdio>
+#include <cstdlib>
 #include <assert.h>
 #include <vector>
+#include "../utils.h"
 
+template<typename T>
 __global__
-void simpleTranspose(int *array_in, int *array_out, int rows_in, int cols_in)
+void simpleTranspose(T *array_in, T *array_out, int rows_in, int cols_in)
 {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
@@ -14,8 +16,9 @@ void simpleTranspose(int *array_in, int *array_out, int rows_in, int cols_in)
     array_out[m * rows_in + n] = array_in[n * cols_in + m];
 }
 
+template<typename T>
 __global__
-void simpleTranspose2D(int *array_in, int *array_out, int rows_in, int cols_in)
+void simpleTranspose2D(T *array_in, T *array_out, int rows_in, int cols_in)
 {
     const int m = threadIdx.x + blockDim.x * blockIdx.x;
     const int n = threadIdx.y + blockDim.y * blockIdx.y;
@@ -23,23 +26,22 @@ void simpleTranspose2D(int *array_in, int *array_out, int rows_in, int cols_in)
     array_out[m * rows_in + n] = array_in[n * cols_in + m];
 }
 
-template<int numWarps>
+template<typename T, int numWarps>
 __global__
-void fastTranspose(int *array_in, int *array_out, int rows_in, int cols_in)
+void fastTranspose(T *array_in, T *array_out, int rows_in, int cols_in)
 {
     const int warpId   = threadIdx.y;
     const int lane     = threadIdx.x;
     const int warpSize = 32;
-    const int smemRows = 32;
 
-    __shared__ int block[smemRows][warpSize + 1];
+    __shared__ T block[warpSize][warpSize + 1];
 
     int bc = blockIdx.x;
     int br = blockIdx.y;
 
     //load 32x32 block into shared memory
-    for (int i = 0; i < smemRows / numWarps; ++i) {
-        int gr = br * smemRows + i * numWarps + warpId;
+    for (int i = 0; i < warpSize / numWarps; ++i) {
+        int gr = br * warpSize + i * numWarps + warpId;
         int gc = bc * warpSize + lane;
 
         block[i * numWarps + warpId][lane] = array_in[gr * cols_in + gc];
@@ -50,29 +52,24 @@ void fastTranspose(int *array_in, int *array_out, int rows_in, int cols_in)
     //now we switch to each warp outputting a row, which will read
     //from a column in the shared memory
     //this way everything remains coalesced
-    for (int i = 0; i < smemRows / numWarps; ++i) {
-        int gr = br * smemRows + lane;
+    for (int i = 0; i < warpSize / numWarps; ++i) {
+        int gr = br * warpSize + lane;
         int gc = bc * warpSize + i * numWarps + warpId;
 
         array_out[gc * rows_in + gr] = block[lane][i * numWarps + warpId];
     }
 }
 
-void check_error() {
-    cudaThreadSynchronize();
-    cudaError_t err = cudaGetLastError();
-    if (err != cudaSuccess)
-        printf("error: %s\n", cudaGetErrorString(err));
-}
-
-void print_array(std::vector<int> &array, int M, int N) {
-    for (int n = N -1; n != -1; --n) {
-        for (int m = 0; m < M; ++m) {
-            printf("%d ", array[n * M + m]);
+template<typename T>
+void isTranspose(const std::vector<T> &A, 
+                 const std::vector<T> &B, 
+                 int side)
+{
+    for (int n = 0; n < side; ++n) {
+        for (int m = 0; m < side; ++m) {
+            assert(A[n * side + m] == B[m * side + n]);
         }
-        printf("\n");
     }
-    printf("\n");
 }
 
 int main(void) {
@@ -84,61 +81,45 @@ int main(void) {
     for(int i = 0; i < side * side; ++i)
         hIn[i] = random() % 100;
 
-//    print_array(hIn, side, side);
-
     int *dIn, *dOut;
-    cudaMalloc(&dIn,  sizeof(int) * side * side);
-    cudaMalloc(&dOut, sizeof(int) * side * side);
+    checkCudaErrors(cudaMalloc(&dIn,  sizeof(int) * side * side));
+    checkCudaErrors(cudaMalloc(&dOut, sizeof(int) * side * side));
 
-    cudaMemcpy(dIn, &hIn[0], sizeof(int) * side * side, cudaMemcpyHostToDevice);
+    checkCudaErrors(cudaMemcpy(dIn, &hIn[0], sizeof(int) * side * side, cudaMemcpyHostToDevice));
 
     const int numThreads = 256;
     const int numBlocks = (side * side + numThreads - 1) / numThreads;
 
     simpleTranspose<<<numBlocks, numThreads>>>(dIn, dOut, side, side);
-    check_error();
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-    cudaMemcpy(&hOut[0], dOut, sizeof(int) * side * side, cudaMemcpyDeviceToHost);
+    checkCudaErrors(cudaMemcpy(&hOut[0], dOut, sizeof(int) * side * side, cudaMemcpyDeviceToHost));
 
-    //    print_array(hOut, side, side);
-
-    for (int n = 0; n < side; ++n) {
-        for (int m = 0; m < side; ++m) {
-            assert(hOut[n * side + m] == hIn[m * side + n]);
-        }
-    }
+    isTranspose(hIn, hOut, side);
 
     dim3 bDim(16, 16);
     dim3 gDim(side / 16, side / 16);
 
     simpleTranspose2D<<<gDim, bDim>>>(dIn, dOut, side, side);
-    check_error();
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-    cudaMemcpy(&hOut[0], dOut, sizeof(int) * side * side, cudaMemcpyDeviceToHost);
+    checkCudaErrors(cudaMemcpy(&hOut[0], dOut, sizeof(int) * side * side, cudaMemcpyDeviceToHost));
 
-    //    print_array(hOut, side, side);
+    isTranspose(hIn, hOut, side);
 
-    for (int n = 0; n < side; ++n) {
-        for (int m = 0; m < side; ++m) {
-            assert(hOut[n * side + m] == hIn[m * side + n]);
-        }
-    }
+    const int warpSize = 32;
+    const int numWarpsPerBlock = 4;
+    bDim.x = warpSize;
+    bDim.y = numWarpsPerBlock;
+    gDim.x = side / warpSize;
+    gDim.y = side / warpSize;
 
-    bDim.x = 32;
-    bDim.y = 4;
-    gDim.x = side / 32;
-    gDim.y = side / 32;
-    fastTranspose<4><<<gDim, bDim>>>(dIn, dOut, side, side);
-    check_error();
-    cudaMemcpy(&hOut[0], dOut, sizeof(int) * side * side, cudaMemcpyDeviceToHost);
+    fastTranspose<int, numWarpsPerBlock><<<gDim, bDim>>>(dIn, dOut, side, side);
+    cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-    //    print_array(hOut, N, M);
+    checkCudaErrors(cudaMemcpy(&hOut[0], dOut, sizeof(int) * side * side, cudaMemcpyDeviceToHost));
 
-    for (int n = 0; n < side; ++n) {
-        for (int m = 0; m < side; ++m) {
-            assert(hOut[n * side + m] == hIn[m * side + n]);
-        }
-    }
+    isTranspose(hIn, hOut, side);
 
     return 0;
 }
