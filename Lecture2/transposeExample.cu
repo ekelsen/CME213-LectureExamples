@@ -121,5 +121,8 @@ int main(void) {
 
     isTranspose(hIn, hOut, side);
 
+    checkCudaErrors(cudaFree(dIn));
+    checkCudaErrors(cudaFree(dOut));
+
     return 0;
 }

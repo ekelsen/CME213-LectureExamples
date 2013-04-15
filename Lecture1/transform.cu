@@ -61,4 +61,7 @@ int main(void) {
     }
   }
 
+  checkCudaErrors(cudaFree(d_input));
+  checkCudaErrors(cudaFree(d_output));
+
 }
