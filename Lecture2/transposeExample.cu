@@ -10,20 +10,20 @@ void simpleTranspose(T *array_in, T *array_out, int rows_in, int cols_in)
 {
     const int tid = threadIdx.x + blockDim.x * blockIdx.x;
 
-    int m = tid % cols_in;
-    int n = tid / cols_in;
+    int col = tid % cols_in;
+    int row = tid / cols_in;
 
-    array_out[m * rows_in + n] = array_in[n * cols_in + m];
+    array_out[col * rows_in + row] = array_in[row * cols_in + col];
 }
 
 template<typename T>
 __global__
 void simpleTranspose2D(T *array_in, T *array_out, int rows_in, int cols_in)
 {
-    const int m = threadIdx.x + blockDim.x * blockIdx.x;
-    const int n = threadIdx.y + blockDim.y * blockIdx.y;
+    const int col = threadIdx.x + blockDim.x * blockIdx.x;
+    const int row = threadIdx.y + blockDim.y * blockIdx.y;
 
-    array_out[m * rows_in + n] = array_in[n * cols_in + m];
+    array_out[col * rows_in + row] = array_in[row * cols_in + col];
 }
 
 template<typename T, int numWarps>
