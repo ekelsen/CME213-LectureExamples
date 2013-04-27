@@ -1,6 +1,7 @@
 #include <vector>
 #include <iostream>
 #include <limits>
+#include <cstdlib>
 #include "../utils.h"
 
 __device__
@@ -10,18 +11,24 @@ int nextPowerOf2(const int x) {
 
 template<int blockSize>
 __global__
-void reduceBlock(const int* const input, int *sum)
+void reduceBlockArbitrarySize(const int* const input, int *sum, int N)
 {
   const int tid = threadIdx.x;
 
   __shared__ int smem[blockSize];
 
-  int myVal = input[tid];
+  int myVal = 0;
+
+  //first do a serial accumulation into each thread's local accumulator
+  for (int globalPos = tid; globalPos < N; globalPos += blockSize) {
+    myVal += input[globalPos];
+  }
 
   smem[tid] = myVal;
 
   __syncthreads();
 
+  //once we've reduce the problem to blockSize values, then reduce
   //use this for non-power of 2 blockSizes
   for (int shift = nextPowerOf2(blockSize) / 2; shift > 0; shift >>= 1) {
     if (tid + shift < blockSize) {
@@ -34,8 +41,8 @@ void reduceBlock(const int* const input, int *sum)
     *sum = smem[tid];
 }
 
-int main(void) {
-  const int N = 121;
+int main(int argc, char **argv) {
+  int N = atoi(argv[1]);
 
   std::vector<int> h_input(N);
 
@@ -53,7 +60,8 @@ int main(void) {
   int *d_sum;
   checkCudaErrors(cudaMalloc(&d_sum, sizeof(int)));
 
-  reduceBlock<N><<<1, N>>>(d_input, d_sum);
+  const int blockSize = 192;
+  reduceBlockArbitrarySize<blockSize><<<1, blockSize>>>(d_input, d_sum, N);
 
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
