@@ -3,6 +3,11 @@
 #include <limits>
 #include "../utils.h"
 
+__device__
+int nextPowerOf2(const int x) {
+  return (1 << (32 - __clz(x - 1)));
+}
+
 template<int blockSize>
 __global__
 void reduceWarp(const int* const input, int *sum)
@@ -18,10 +23,8 @@ void reduceWarp(const int* const input, int *sum)
   __syncthreads();
 
   //use this for non-power of 2 blockSizes
-  //for (int shift = (1 << (32 - __clz(blockSize - 1))); shift > 0; shift >>= 1) {
-  //  if (tid + shift < blockSize) {
-  for (int shift = blockSize / 2; shift > 0; shift >>= 1) {
-    if (tid < shift) {
+  for (int shift = nextPowerOf2(blockSize) / 2; shift > 0; shift >>= 1) {
+    if (tid + shift < blockSize) {
       smem[tid] += smem[tid + shift];
     }
     __syncthreads();
@@ -32,7 +35,7 @@ void reduceWarp(const int* const input, int *sum)
 }
 
 int main(void) {
-  const int N = 128;
+  const int N = 121;
 
   std::vector<int> h_input(N);
 
