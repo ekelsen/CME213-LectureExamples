@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
 
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
-  std::vector<int> h_d_b(numCols);
+  std::vector<int> h_d_b(numRows);
   checkCudaErrors(cudaMemcpy(&h_d_b[0], d_b, sizeof(int) * numRows, cudaMemcpyDeviceToHost));
 
   for (int r = 0; r < numRows; ++r) {
