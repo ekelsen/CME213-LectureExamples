@@ -24,7 +24,7 @@ void reduceBlock(const int* const input, int *sum)
 
   //use this for non-power of 2 blockSizes
   for (int shift = nextPowerOf2(blockSize) / 2; shift > 0; shift >>= 1) {
-    if (tid + shift < blockSize) {
+    if (tid < shift && tid + shift < blockSize) {
       smem[tid] += smem[tid + shift];
     }
     __syncthreads();

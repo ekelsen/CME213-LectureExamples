@@ -11,16 +11,17 @@ int nextPowerOf2(const int x) {
 
 template<int blockSize>
 __global__
-void reduceBlockArbitrarySize(const int* const input, int *sum, int N)
+void reduceMultiBlock(const int* const input, int *sum, int N)
 {
-  const int tid = threadIdx.x;
+  const int tid  = threadIdx.x;
+  const int gtid = blockIdx.x * blockSize + threadIdx.x;
 
   __shared__ int smem[blockSize];
 
   int myVal = 0;
 
   //first do a serial accumulation into each thread's local accumulator
-  for (int globalPos = tid; globalPos < N; globalPos += blockSize) {
+  for (int globalPos = gtid; globalPos < N; globalPos += blockSize * gridDim.x) {
     myVal += input[globalPos];
   }
 
@@ -38,7 +39,7 @@ void reduceBlockArbitrarySize(const int* const input, int *sum, int N)
   }
 
   if (tid == 0)
-    *sum = smem[tid];
+    atomicAdd(sum, smem[tid]);
 }
 
 int main(int argc, char **argv) {
@@ -59,9 +60,11 @@ int main(int argc, char **argv) {
 
   int *d_sum;
   checkCudaErrors(cudaMalloc(&d_sum, sizeof(int)));
+  checkCudaErrors(cudaMemset(d_sum, 0, sizeof(int)));
 
-  const int blockSize = 192;
-  reduceBlockArbitrarySize<blockSize><<<1, blockSize>>>(d_input, d_sum, N);
+  const int blockSize = 128;
+  const int numBlocks = min( (N + blockSize - 1) / blockSize, 64);
+  reduceMultiBlock<blockSize><<<numBlocks, blockSize>>>(d_input, d_sum, N);
 
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
