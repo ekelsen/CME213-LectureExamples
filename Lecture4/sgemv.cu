@@ -38,7 +38,7 @@ int main(int argc, char **argv) {
 
   std::vector<int> h_A(numRows * numCols);
   std::vector<int> h_x(numCols);
-  std::vector<int> h_b(numCols);
+  std::vector<int> h_b(numRows);
 
   for (int i = 0; i < numRows * numCols; ++i)
     h_A[i] = rand() % 10;
@@ -57,7 +57,7 @@ int main(int argc, char **argv) {
   int *d_A, *d_x, *d_b;
   checkCudaErrors(cudaMalloc(&d_A, sizeof(int) * numRows * numCols));
   checkCudaErrors(cudaMalloc(&d_x, sizeof(int) * numCols));
-  checkCudaErrors(cudaMalloc(&d_b, sizeof(int) * numCols));
+  checkCudaErrors(cudaMalloc(&d_b, sizeof(int) * numRows));
 
   checkCudaErrors(cudaMemcpy(d_A, &h_A[0], sizeof(int) * numRows * numCols, cudaMemcpyHostToDevice));
   checkCudaErrors(cudaMemcpy(d_x, &h_x[0], sizeof(int) * numCols, cudaMemcpyHostToDevice));
@@ -73,11 +73,11 @@ int main(int argc, char **argv) {
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   std::vector<int> h_d_b(numCols);
-  checkCudaErrors(cudaMemcpy(&h_d_b[0], d_b, sizeof(int) * numCols, cudaMemcpyDeviceToHost));
+  checkCudaErrors(cudaMemcpy(&h_d_b[0], d_b, sizeof(int) * numRows, cudaMemcpyDeviceToHost));
 
-  for (int c = 0; c < numCols; ++c) {
-    if (h_b[c] != h_d_b[c]) {
-      printf("Mismatch at pos %d: %d %d\n", c, h_b[c], h_d_b[c]);
+  for (int r = 0; r < numRows; ++r) {
+    if (h_b[r] != h_d_b[r]) {
+      printf("Mismatch at pos %d: %d %d\n", r, h_b[r], h_d_b[r]);
     }
   }
 
