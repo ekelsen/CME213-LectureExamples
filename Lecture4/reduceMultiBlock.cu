@@ -10,6 +10,25 @@ int nextPowerOf2(const int x) {
 }
 
 template<int blockSize>
+__device__
+int blockReduce(const int threadVal, int *smem) {
+  const int tid = threadIdx.x;
+  smem[tid] = threadVal;
+
+  __syncthreads();
+
+  //use this for non-power of 2 blockSizes
+  for (int shift = nextPowerOf2(blockSize) / 2; shift > 0; shift >>= 1) {
+    if (tid < shift && tid + shift < blockSize) {
+      smem[tid] += smem[tid + shift];
+    }
+    __syncthreads();
+  }
+
+  return smem[0];
+}
+
+template<int blockSize>
 __global__
 void reduceMultiBlock(const int* const input, int *sum, int N)
 {
@@ -25,21 +44,10 @@ void reduceMultiBlock(const int* const input, int *sum, int N)
     myVal += input[globalPos];
   }
 
-  smem[tid] = myVal;
-
-  __syncthreads();
-
-  //once we've reduce the problem to blockSize values, then reduce
-  //use this for non-power of 2 blockSizes
-  for (int shift = nextPowerOf2(blockSize) / 2; shift > 0; shift >>= 1) {
-    if (tid < shift && tid + shift < blockSize) {
-      smem[tid] += smem[tid + shift];
-    }
-    __syncthreads();
-  }
+  int blockSum = blockReduce<blockSize>(myVal, smem);
 
   if (tid == 0)
-    atomicAdd(sum, smem[tid]);
+    atomicAdd(sum, blockSum);
 }
 
 int main(int argc, char **argv) {
@@ -72,7 +80,6 @@ int main(int argc, char **argv) {
   checkCudaErrors(cudaMemcpy(&h_d_sum, d_sum, sizeof(int), cudaMemcpyDeviceToHost));
 
   std::cout << "cpu: " << h_sum << " gpu: " << h_d_sum << std::endl;
-
 
   return 0;
 }
