@@ -70,8 +70,8 @@ int main(int argc, char **argv) {
   checkCudaErrors(cudaMalloc(&d_sum, sizeof(int)));
   checkCudaErrors(cudaMemset(d_sum, 0, sizeof(int)));
 
-  const int blockSize = 128;
-  const int numBlocks = min( (N + blockSize - 1) / blockSize, 64);
+  const int blockSize = 192;
+  const int numBlocks = min( (N + blockSize - 1) / blockSize, 128);
   reduceMultiBlock<blockSize><<<numBlocks, blockSize>>>(d_input, d_sum, N);
 
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
