@@ -3,6 +3,7 @@
 #include <limits>
 #include <cstdlib>
 #include "../utils.h"
+#include "../timer.h"
 
 __device__
 int nextPowerOf2(const int x) {
@@ -71,14 +72,21 @@ int main(int argc, char **argv) {
   checkCudaErrors(cudaMemset(d_sum, 0, sizeof(int)));
 
   const int blockSize = 192;
-  const int numBlocks = min( (N + blockSize - 1) / blockSize, 128);
+  const int numBlocks = min( (N + blockSize - 1) / blockSize, 512);
+
+  GpuTimer timer; timer.Start();
+
   reduceMultiBlock<blockSize><<<numBlocks, blockSize>>>(d_input, d_sum, N);
+
+  timer.Stop();
 
   cudaDeviceSynchronize(); checkCudaErrors(cudaGetLastError());
 
   int h_d_sum;
   checkCudaErrors(cudaMemcpy(&h_d_sum, d_sum, sizeof(int), cudaMemcpyDeviceToHost));
 
+  std::cout << "time: " << timer.Elapsed() << " ms" << std::endl;
+  std::cout << "Bandwidth: " << (N * sizeof(int) / 1E6) / timer.Elapsed() << std::endl;
   std::cout << "cpu: " << h_sum << " gpu: " << h_d_sum << std::endl;
 
   return 0;
