@@ -99,8 +99,7 @@ void matrixMulCUDA(float *C, float *A, float *B, int wA, int wB)
         // Multiply the two matrices together;
         // each thread computes one element
         // of the block sub-matrix
-#pragma unroll
-
+        #pragma unroll
         for (int k = 0; k < BLOCK_SIZE; ++k)
         {
             Csub += As[ty][k] * Bs[k][tx];
@@ -192,9 +191,20 @@ int matrixMultiply(int argc, char **argv, int block_size, dim3 &dimsA, dim3 &dim
     float msecPerMatrixMul = msecTotal / nIter;
     double flopsPerMatrixMul = 2.0 * (double)dimsA.x * (double)dimsA.y * (double)dimsB.x;
     double gigaFlops = (flopsPerMatrixMul * 1.0e-9f) / (msecPerMatrixMul / 1000.0f);
+    double effectiveBytes = (((double)(dimsA.x + dimsB.y) * dimsA.y * dimsB.x) + dimsA.y * dimsB.x) * sizeof(int);
+    double effectiveBandwidth = effectiveBytes / 1E6 / msecPerMatrixMul;
+    double bAx = dimsA.x / 32;
+    double bAy = dimsA.y / 32;
+    double bBx = dimsB.x / 32;
+    double bBy = dimsB.y / 32;
+    double blocksLoaded = ((bAx + bBy) * bAy * bBx) + bAy * bBx;
+    double bytesLoaded = blocksLoaded * 32 * 32 * sizeof(int);
+    double actualBandwidth = bytesLoaded / 1E6 / msecPerMatrixMul;
     printf(
-        "Performance= %.2f GFlop/s, Time= %.3f msec, Size= %.0f Ops, WorkgroupSize= %u threads/block\n",
+        "Performance= %.2f GFlop/s, EFfective %.2f GBytes/s, Actual %.2f GBytes/s, Time= %.3f msec, Size= %.0f Ops, WorkgroupSize= %u threads/block\n",
         gigaFlops,
+        effectiveBandwidth,
+        actualBandwidth,
         msecPerMatrixMul,
         flopsPerMatrixMul,
         threads.x * threads.y);
