@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
   checkCudaErrors(cudaMemset(d_sum, 0, sizeof(int)));
 
   const int blockSize = 192;
-  const int numBlocks = min( (N + blockSize - 1) / blockSize, 512);
+  const int numBlocks = min( ((N+1)/2 + blockSize - 1) / blockSize, 512);
 
   GpuTimer timer; timer.Start();
 

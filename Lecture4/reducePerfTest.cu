@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
 
   std::cout << std::setw(12) << "Block Size" << " " << std::setw(12) << "Bandwidth" << std::endl;
   for (int maxBlocks = 32; maxBlocks <= 256; maxBlocks += 2) {
-    const int numBlocks = min( (N + blockSize - 1) / blockSize, maxBlocks);
+    const int numBlocks = min( ((N+1)/2 + blockSize - 1) / blockSize, maxBlocks);
 
     GpuTimer timer; timer.Start();
 
